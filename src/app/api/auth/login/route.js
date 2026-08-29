@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { signToken } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseServer';
 
 export async function POST(request) {
@@ -17,20 +16,22 @@ export async function POST(request) {
       password,
     }).catch((e) => ({ error: e }));
 
-    if (supaErr || !supaData || !supaData.user) {
+    if (supaErr || !supaData || !supaData.session) {
       console.error('Supabase signIn error:', supaErr || supaData);
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 400 });
     }
+
+    const supaUser = supaData.user;
 
     // Find or create Prisma user synced to Supabase user id
     let user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       user = await prisma.user.create({
         data: {
-          id: supaData.user.id,
-          email: supaData.user.email,
+          id: supaUser.id,
+          email: supaUser.email,
           password: '',
-          name: supaData.user.user_metadata?.name || supaData.user.email.split('@')[0],
+          name: supaUser.user_metadata?.name || supaUser.email.split('@')[0],
         },
       });
     }
@@ -45,29 +46,23 @@ export async function POST(request) {
       isSubscribed = false;
     }
 
-    // Create JWT token (expires in 7 days)
-    const expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    const token = signToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.name,
-      exp: expires,
-    });
-
-    // Set cookie
+    // Prepare response and set Supabase session cookies
     const response = NextResponse.json({
       success: true,
       user: { id: user.id, email: user.email, name: user.name, role: user.role, isSubscribed },
     });
 
-    response.cookies.set('token', token, {
+    const session = supaData.session;
+    const { access_token, refresh_token, expires_at } = session;
+    const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
       path: '/',
-    });
+    };
+    response.cookies.set('sb-access-token', access_token, { ...cookieOpts, maxAge: 60 * 60 * 24 * 7 });
+    response.cookies.set('sb-refresh-token', refresh_token, { ...cookieOpts, maxAge: 60 * 60 * 24 * 30 });
+    response.cookies.set('sb-expires-at', String(expires_at), { ...cookieOpts, maxAge: 60 * 60 * 24 * 7 });
 
     return response;
   } catch (error) {
