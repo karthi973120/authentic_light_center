@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 
 export default function Navbar() {
   const [user, setUser] = useState(null);
@@ -12,35 +13,28 @@ export default function Navbar() {
 
   const fetchUser = async () => {
     try {
-      const res = await fetch('/api/auth/login'); // Or a generic /api/auth/me, but we can reuse login route with GET or check status
-      // Wait, we can fetch user profile via getCurrentUser from a small route or just check if cookie exists.
-      // Let's create a small route `/api/auth/me` or just fetch from a `/api/auth/user` endpoint.
-      const userRes = await fetch('/api/auth/me');
-      if (userRes.ok) {
-        const data = await userRes.json();
-        if (data.user) {
-          setUser(data.user);
-        } else {
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
+      const supabase = createSupabaseClient();
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user || null);
     } catch (e) {
       setUser(null);
     }
   };
 
   useEffect(() => {
+    const supabase = createSupabaseClient();
     fetchUser();
-    // Fetch user on route changes
-    const handleRouteChange = () => fetchUser();
-    // We listen to pathname changes as a proxy for navigation
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, [pathname]);
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      const supabase = createSupabaseClient();
+      await supabase.auth.signOut();
       setUser(null);
       router.refresh();
       router.push('/');

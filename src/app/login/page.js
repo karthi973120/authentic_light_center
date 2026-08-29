@@ -1,10 +1,11 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -19,23 +20,28 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong');
-      }
-
+      const supabase = createSupabaseClient();
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
       router.push('/meditation');
       router.refresh();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Something went wrong');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError('');
+    try {
+      const supabase = createSupabaseClient();
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin + '/meditation' },
+      });
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
     }
   };
 
@@ -81,6 +87,10 @@ export default function Login() {
 
             <button type="submit" className="btn-premium login-btn" disabled={loading}>
               {loading ? 'Entering Portal...' : 'Sign In'}
+            </button>
+
+            <button type="button" onClick={handleGoogle} className="btn-google" disabled={loading}>
+              Sign in with Google
             </button>
           </form>
 

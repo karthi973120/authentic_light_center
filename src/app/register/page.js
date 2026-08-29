@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -20,21 +21,17 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+      const supabase = createSupabaseClient();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong');
-      }
-
+      if (error) throw error;
       router.push('/meditation');
       router.refresh();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
