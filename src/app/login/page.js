@@ -38,7 +38,7 @@ export default function Login() {
       const supabase = createSupabaseClient();
       await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin + '/meditation' },
+        options: { redirectTo: window.location.origin + '/auth/callback' },
       });
     } catch (err) {
       setError(err.message || 'Google sign-in failed');
